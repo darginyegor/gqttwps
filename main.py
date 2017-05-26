@@ -1,6 +1,7 @@
 import sys
 import json
 import requests
+import time
 from bs4 import BeautifulSoup
 from PyQt5 import QtWidgets, uic
 
@@ -20,14 +21,30 @@ class App(QtWidgets.QApplication):
     # Получение и кэширование картинок по запросу
     def get_by_query(self, q, min_size):
         url = 'http://yandex.ru/images/search?text='+q+'&isize=eq&iw='+min_size[0]+'&ih='+min_size[1]
+        print(url)
         response = requests.get(url, verify=False)
-        soup = BeautifulSoup(response.text, "lxml").find(class_='serp-list')
+        soup = BeautifulSoup(response.text, "lxml")  # .find(class_='serp-list')
+        print(soup)
         data_list = [i['data-bem'] for i in soup.find_all(class_='serp-item')]
         pictures = []
         for item in data_list[:10]:
             data = json.loads(item)
             pictures.append(data['serp-item']['img_href'])
-        print(pictures)
+        self.cache(pictures)
+
+
+    def cache(self, list_of_urls):
+        for url in list_of_urls:
+            hash = str(time.time())
+            ext = url[3:]
+            filename = 'cached/'+hash+'.'+ext
+            image = requests.get(url, verify=False).content
+            f = open(filename, 'wb')
+            f.write(image)
+            f.close()
+
+
+
 
 
 # Класс графического интерфейса
