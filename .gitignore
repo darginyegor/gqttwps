@@ -6,6 +6,10 @@ __pycache__/
 # Idea files
 .idea
 
+# App cache
+cached/*
+api.cfg
+
 # C extensions
 *.so
 
