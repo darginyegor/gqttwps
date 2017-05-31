@@ -2,6 +2,9 @@ import sys
 import json
 import requests
 import time
+import os
+from rt import RepeatedTimer
+import threading
 from bs4 import BeautifulSoup
 from PyQt5 import QtWidgets, uic
 
@@ -9,6 +12,8 @@ from PyQt5 import QtWidgets, uic
 class App(QtWidgets.QApplication):
     def __init__(self, list_of_str):
         super().__init__(list_of_str)
+        self.thread_controller = ThreadController()
+        self.thread_controller.repeat('wp_setter', 5, self.set_wallpaper, '67.jpg')
         self.ui = Ui()
         self.ui.show()
         self.ui.getButton.clicked.connect(self.on_get_button_click)
@@ -26,11 +31,15 @@ class App(QtWidgets.QApplication):
         min_size = str(self.ui.sizeSelector.currentText()).split('x')
         api_key = self.ui.apiKeyInput.text()
         username = self.ui.usernameInput.text()
-        self.get_by_query(query, min_size, api_key, username)
+        self.thread_controller.thread(self.get_by_query, 'images_getter', query, min_size, api_key, username)
+        self.thread_controller['images_getter'].start()
 
     # Получение и кэширование картинок по запросу
     def get_by_query(self, q, min_size, api_key, username):
-        url = 'http://yandex.ru/images/search/xml?user=al'+username+'&key='+api_key+'&text='+q+'&isize=eq&iw='+min_size[0]+'&ih='+min_size[1]
+        url = 'http://yandex.ru/images/search/xml?user=al' + username \
+              + '&key=' + api_key \
+              + '&text=' + q \
+              + '&isize=eq&iw=' + min_size[0] + '&ih=' + min_size[1]
         print('Получение списка URL-адресов...')
         response = requests.get(url, verify=False)
         soup = BeautifulSoup(response.text, "lxml")  # .find(class_='serp-list')
@@ -42,8 +51,15 @@ class App(QtWidgets.QApplication):
         print('Кэширование изображений...')
         self.cache(pictures)
 
+    # Установка изображения в качетсве обоев
+    # Setting picture as a wallpaper
+    def set_wallpaper(self, image):
+        path = 'file://' + os.path.abspath(os.path.dirname(__file__)) + '/cached/' + image
+        os.system('gsettings set org.gnome.desktop.background picture-uri ' + path)
+
     # Кэширование полученных изображений
-    def cache(self, list_of_urls):
+    @staticmethod
+    def cache(list_of_urls):
         for url in list_of_urls:
             name = str(len(url))  # str(time.time())
             ext = url[-3:]
@@ -60,6 +76,22 @@ class Ui(QtWidgets.QMainWindow):
         super().__init__()
         uic.loadUi('ui/gqttwps.ui', self)
         self.setWindowTitle('Параметры загрузки обоев')
+
+
+class ThreadController:
+    def __init__(self):
+        self.threads = {}
+
+    def __getitem__(self, i):
+        return self.threads[i]
+
+    def thread(self, target, name, *args):
+        thread = threading.Thread(target=target, name=name, args=[*args])
+        self.threads[name] = thread
+
+    def repeat(self, name,  interval, target, *args):
+        rt = RepeatedTimer(interval, target, *args)
+        self.threads[name] = rt
 
 
 app = App(sys.argv)
