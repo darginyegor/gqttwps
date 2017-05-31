@@ -1,7 +1,6 @@
 import sys
 import json
 import requests
-import time
 import os
 from rt import RepeatedTimer
 import threading
@@ -13,10 +12,14 @@ class App(QtWidgets.QApplication):
     def __init__(self, list_of_str):
         super().__init__(list_of_str)
         self.thread_controller = ThreadController()
-        self.thread_controller.repeat('wp_setter', 5, self.set_wallpaper, '67.jpg')
+        self.pictures = []
+        self.current_wallpaper = -1
+        self.update_pictures()
         self.ui = Ui()
         self.ui.show()
         self.ui.getButton.clicked.connect(self.on_get_button_click)
+        self.ui.startButton.clicked.connect(self.wp_setter_start)
+        self.ui.stopButton.clicked.connect(self.wp_setter_stop)
         try:
             f = open('api.cfg')
             config = [line for line in f]
@@ -51,15 +54,28 @@ class App(QtWidgets.QApplication):
         print('Кэширование изображений...')
         self.cache(pictures)
 
-    # Установка изображения в качетсве обоев
-    # Setting picture as a wallpaper
-    def set_wallpaper(self, image):
-        path = 'file://' + os.path.abspath(os.path.dirname(__file__)) + '/cached/' + image
-        os.system('gsettings set org.gnome.desktop.background picture-uri ' + path)
+    def update_pictures(self):
+        self.pictures = [f for f in os.listdir(os.path.abspath(os.path.dirname(__file__)) + '/cached')]
+
+    # Запуск цикла смены обоев
+    def wp_setter_start(self):
+        interval = self.ui.intervalSpinBox.value()
+        self.thread_controller.repeat('wp_setter', interval, self.wp_setter_step)
+
+    # Шаг ентого цикла
+    def wp_setter_step(self):
+        self.current_wallpaper += 1
+        if not self.current_wallpaper < len(self.pictures):
+            self.current_wallpaper = 0
+        print('current', self.current_wallpaper)
+        self.set_wallpaper(self.pictures[self.current_wallpaper])
+
+    # Остановка цикла
+    def wp_setter_stop(self):
+        self.thread_controller['wp_setter'].stop()
 
     # Кэширование полученных изображений
-    @staticmethod
-    def cache(list_of_urls):
+    def cache(self, list_of_urls):
         for url in list_of_urls:
             name = str(len(url))  # str(time.time())
             ext = url[-3:]
@@ -68,6 +84,14 @@ class App(QtWidgets.QApplication):
             f = open(filename, 'wb+')
             f.write(image)
             f.close()
+        self.update_pictures()
+
+    # Установка изображения в качетсве обоев
+    # Setting picture as a wallpaper
+    @staticmethod
+    def set_wallpaper(image):
+        path = 'file://' + os.path.abspath(os.path.dirname(__file__)) + '/cached/' + image
+        os.system('gsettings set org.gnome.desktop.background picture-uri ' + path)
 
 
 # Класс графического интерфейса
@@ -95,6 +119,6 @@ class ThreadController:
 
 
 app = App(sys.argv)
-sys.exit(app.exec_())
+sys.exit(app.exec_(),)
 
 
